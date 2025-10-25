@@ -1,0 +1,107 @@
+sudo ip link set can0 down
+sudo ip link set can0 type can bitrate 125000
+sudo ip link set can0 up
+
+# Levantar el contenedor, misma imagen
+
+docker run -it \
+  --name wsn_cont_canF_ubu_t4 \
+  --hostname host_taller4_canv \
+  --network host \
+  --cap-add=NET_ADMIN \
+  --cap-add=NET_RAW \
+  -e DISPLAY=$DISPLAY \
+  -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
+  -v "$HOME/Documentos/WSN/Taller_4_CAN_Fisico/pcaps:/root/capturas:rw" \
+  wsn-taller-4-canv-img:parte1
+
+# Verificar can0 up
+
+ip -details link show can0
+
+# Escuchar tramas en tiempo real
+
+candump -tz can0
+
+# Verificar estado del bus
+
+ip -details -statistics link show can0
+
+
+# Parte III Arduino ICSim
+
+# En el host
+
+xhost +local:docker
+
+
+####################
+
+#Intermitente derecha
+
+02 XX XX XX XX 
+
+#Intermitente izquierdas
+
+01 XX XX XX XX 
+
+# Velocidad máxima
+
+XX XX XX 38 94
+
+# Estado Puertas
+
+# Todo Cerrado
+
+00 00 00 00 00 00
+
+# Todo abierto 
+
+00 00 0F 00 00 00
+
+## Puerta cerrada (solo) delantera izquierda
+
+00 00 01 00 00 00
+
+## Puerta cerrada (solo) delantera derecha
+
+00 00 02 00 00 00
+
+## Puerta cerrada (solo) trasera izquierda
+
+00 00 04 00 00 00
+
+## Puerta cerrada (solo) trasera derecha
+
+00 00 08 00 00 00
+
+## Combinaciones dan las puertas cerradas multiples
+
+
+###################################################
+
+
+Opción B — Si no tienes USB-CAN “funcionando” o prefieres usar el Arduino como dispositivo serial SLCAN
+
+Idea: el Arduino corre MCP2515 y actúa como puente serial SLCAN — se comunica con el host por /dev/ttyACM0 o /dev/ttyUSB0 hablando el protocolo slcan/lawicel. El host (can-utils) usa slcan_attach/slcand para convertir ese puerto serie en una interfaz SocketCAN (slcan0), que usas desde el contenedor.
+
+Pasos (alto nivel):
+
+Flashea un firmware SLCAN al Arduino (hay implementaciones que hablan el protocolo SLCAN y controlan el MCP2515). Si no tienes una lista de firmware, puedes usar una librería/firmware SLCAN (busca “SLCAN Arduino MCP2515” — hay proyectos tipo “mcp2515 slcan” en GitHub).
+
+Resultado: Arduino presentará /dev/ttyACM0 y responderá a comandos SLCAN.
+
+En el host, instala can-utils y crea la interfaz slcan:
+
+# ejemplo con slcan_attach (si está en can-utils)
+sudo slcan_attach -s6 -o /dev/ttyACM0    # -s6 => 125 kbit/s (s1=10k, s2=20k,... s6=125k)
+# ó usando slcand:
+sudo slcand -o -c /dev/ttyACM0 slcan0 125000
+sudo ip link set up slcan0
+ip -details link show slcan0
+
+
+Expón slcan0 al contenedor exactamente igual que en la Opción A (usar --network host y permisos). Dentro del contenedor ICSim usaría slcan0 (o puedes ip link set slcan0 name can0 y usar can0).
+
+Pros: si tu Arduino y MCP2515 están firmados para SLCAN, no necesitas un adaptador USB-CAN extra.
+Contras: necesitas el firmware SLCAN en Arduino (puede requerir buscar/compilarlo), y la estabilidad depende del firmware.

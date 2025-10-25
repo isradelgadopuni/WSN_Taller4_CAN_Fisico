@@ -1,0 +1,5 @@
+# opción típica con slcand (bitrate explícito)
+sudo slcand -o -c /dev/ttyACM0 slcan0 125000
+sudo ip link set up slcan0
+ip -details link show slcan0
+
